@@ -141,6 +141,21 @@ const posts = existsSync(postsDir)
       .sort((a, b) => b.date.localeCompare(a.date))
   : [];
 
+// ---------- الصفحات ----------
+const RESERVED = new Set(["posts", "about", "admin", "api", "images", "404"]);
+const pagesDir = join(ROOT, "content", "pages");
+const pages = existsSync(pagesDir)
+  ? readdirSync(pagesDir)
+      .filter((f) => f.endsWith(".md"))
+      .map((f) => {
+        const { data, body } = parseFrontmatter(readFileSync(join(pagesDir, f), "utf8"));
+        const slug = data.slug || basename(f, ".md");
+        return { title: data.title || slug, slug, order: Number(data.order) || 0, draft: data.draft === true, html: markdown(body) };
+      })
+      .filter((p) => !p.draft && !RESERVED.has(p.slug))
+      .sort((a, b) => a.order - b.order || a.title.localeCompare(b.title, "ar"))
+  : [];
+
 // ---------- القالب ----------
 const logo = `<a class="logo" href="/" aria-label="${esc(site.title)}"><img class="logo-img" src="/logo.jpg" alt="" width="44" height="44"><span class="logo-text"><span class="logo-word">عامر</span><span class="logo-cursor" aria-hidden="true"></span></span></a>`;
 
@@ -162,7 +177,6 @@ function layout({ title, description, path, body, type = "website", cover = "" }
 <meta property="og:url" content="${esc(url)}">
 <meta property="og:locale" content="ar_AR">
 <meta property="og:image" content="${esc(site.url.replace(/\/$/, "") + (cover || "/logo.jpg"))}">
-<link rel="alternate" type="application/rss+xml" title="${esc(site.title)}" href="/rss.xml">
 <link rel="icon" href="/favicon.png" type="image/png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -176,7 +190,7 @@ function layout({ title, description, path, body, type = "website", cover = "" }
     <nav aria-label="التنقل">
       <a href="/"${path === "/" ? ' aria-current="page"' : ""}>المقالات</a>
       <a href="/about/"${path === "/about/" ? ' aria-current="page"' : ""}>من أنا</a>
-      <a href="/rss.xml">RSS</a>
+      ${pages.map((pg) => `<a href="/${esc(pg.slug)}/"${path === "/" + pg.slug + "/" ? ' aria-current="page"' : ""}>${esc(pg.title)}</a>`).join("")}
     </nav>
   </div>
 </header>
@@ -270,6 +284,18 @@ if (existsSync(aboutFile)) {
   );
 }
 
+// الصفحات
+for (const p of pages) {
+  write(
+    `${p.slug}/index.html`,
+    layout({
+      title: p.title,
+      path: `/${p.slug}/`,
+      body: `<article class="post"><header class="post-head"><h1>${esc(p.title)}</h1></header><div class="prose">${p.html}</div></article>`,
+    })
+  );
+}
+
 // 404
 write(
   "404.html",
@@ -280,26 +306,13 @@ write(
   })
 );
 
-// RSS و sitemap
+// sitemap
 const base = site.url.replace(/\/$/, "");
-write(
-  "rss.xml",
-  `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0"><channel>
-<title>${esc(site.title)}</title><link>${base}/</link><description>${esc(site.description)}</description><language>ar</language>
-${posts
-  .map(
-    (p) =>
-      `<item><title>${esc(p.title)}</title><link>${base}/posts/${p.slug}/</link><guid>${base}/posts/${p.slug}/</guid><pubDate>${new Date(p.date).toUTCString()}</pubDate><description>${esc(p.description)}</description></item>`
-  )
-  .join("\n")}
-</channel></rss>`
-);
 write(
   "sitemap.xml",
   `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${["/", "/about/", ...posts.map((p) => `/posts/${p.slug}/`)].map((u) => `<url><loc>${base}${u}</loc></url>`).join("\n")}
+${["/", "/about/", ...pages.map((p) => `/${p.slug}/`), ...posts.map((p) => `/posts/${p.slug}/`)].map((u) => `<url><loc>${base}${u}</loc></url>`).join("\n")}
 </urlset>`
 );
 write("robots.txt", `User-agent: *\nAllow: /\nSitemap: ${base}/sitemap.xml\n`);
