@@ -57,3 +57,8 @@ tags: تصميم، مونتاج
 ## نطاق خاص (اختياري)
 
 من Cloudflare Pages ثم Custom domains. شراء النطاق هو الشيء الوحيد المدفوع.
+
+
+## لوحة التحكم
+
+تسجيل الدخول والإدارة من المسار `/admin/`. الأسرار (ADMIN_EMAIL و ADMIN_PASSWORD و SESSION_SECRET و GITHUB_TOKEN) تُضبط في Cloudflare فقط.
