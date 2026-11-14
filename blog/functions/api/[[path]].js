@@ -83,6 +83,39 @@ function meta(text) {
   return o;
 }
 
+// ---------- إشعارات الزوار (Web Push بدون محتوى) ----------
+// مفاتيح VAPID تُولَّد تلقائيًا أول مرة وتُحفظ في KV (الربط SUBS)، فلا أسرار تُنسخ يدويًا.
+const PUSH_HOST = /^(fcm\.googleapis\.com|android\.googleapis\.com|updates\.push\.services\.mozilla\.com|[a-z0-9.-]+\.push\.services\.mozilla\.com|[a-z0-9.-]+\.notify\.windows\.com|[a-z0-9.-]+\.push\.apple\.com|web\.push\.apple\.com)$/;
+let VAPID = null;
+async function vapid(env) {
+  if (VAPID) return VAPID;
+  let saved = await env.SUBS.get("vapid", "json");
+  if (!saved) {
+    const kp = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
+    saved = { priv: await crypto.subtle.exportKey("jwk", kp.privateKey), pub: b64u(await crypto.subtle.exportKey("raw", kp.publicKey)) };
+    await env.SUBS.put("vapid", JSON.stringify(saved));
+  }
+  const key = await crypto.subtle.importKey("jwk", saved.priv, { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
+  VAPID = { key, pub: saved.pub };
+  return VAPID;
+}
+async function sendPush(env, endpoint, site) {
+  const v = await vapid(env);
+  const head = b64u(enc.encode(JSON.stringify({ typ: "JWT", alg: "ES256" })));
+  const claims = b64u(enc.encode(JSON.stringify({ aud: new URL(endpoint).origin, exp: Math.floor(Date.now() / 1000) + 12 * 3600, sub: site })));
+  const sig = b64u(await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, v.key, enc.encode(head + "." + claims)));
+  return fetch(endpoint, { method: "POST", headers: { authorization: "vapid t=" + head + "." + claims + "." + sig + ", k=" + v.pub, ttl: "86400", "content-length": "0" } });
+}
+const subId = async (ep) => "sub:" + b64u(await crypto.subtle.digest("SHA-256", enc.encode(ep)));
+function goodEndpoint(ep) {
+  try {
+    const u = new URL(ep);
+    return ep.length <= 700 && u.protocol === "https:" && PUSH_HOST.test(u.hostname);
+  } catch (e) {
+    return false;
+  }
+}
+
 export async function onRequest({ request, env }) {
   const url = new URL(request.url);
   const route = url.pathname.replace(/^\/api\/?/, "").replace(/\/$/, "");
@@ -118,8 +151,46 @@ export async function onRequest({ request, env }) {
     return json({ ok: true }, 200, { "set-cookie": COOKIE + "=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict" });
   }
 
+  // مسارات الزوار (الاشتراك في الإشعارات)
+  if (route === "vapid" && method === "GET") {
+    if (!env.SUBS) return json({ error: "kv" }, 503);
+    return json({ key: (await vapid(env)).pub });
+  }
+  if ((route === "subscribe" || route === "unsubscribe") && method === "POST") {
+    if (!env.SUBS) return json({ error: "kv" }, 503);
+    const b = await request.json().catch(() => ({}));
+    if (!goodEndpoint(b.endpoint)) return json({ error: "input" }, 400);
+    const id = await subId(b.endpoint);
+    if (route === "subscribe") await env.SUBS.put(id, "1", { metadata: { e: b.endpoint } });
+    else await env.SUBS.delete(id);
+    return json({ ok: true });
+  }
+
   if (!(await authed(request, env))) return json({ error: "auth" }, 401);
   if (route === "me") return json({ ok: true, github: !!env.GITHUB_TOKEN });
+  // إرسال إشعار «مقال جديد» للمشتركين (دفعات صغيرة)
+  if (route === "notify" && method === "POST") {
+    if (!env.SUBS) return json({ error: "kv" }, 503);
+    const b = await request.json().catch(() => ({}));
+    const l = await env.SUBS.list({ prefix: "sub:", limit: 40, cursor: b.cursor || undefined });
+    let sent = 0;
+    let removed = 0;
+    await Promise.all(
+      l.keys.map(async (k) => {
+        const ep = k.metadata && k.metadata.e;
+        if (!ep || !goodEndpoint(ep)) return;
+        try {
+          const r = await sendPush(env, ep, url.origin);
+          if (r.status === 404 || r.status === 410) {
+            await env.SUBS.delete(k.name);
+            removed++;
+          } else if (r.ok) sent++;
+        } catch (e) {}
+      })
+    );
+    return json({ ok: true, sent, removed, done: l.list_complete, cursor: l.list_complete ? null : l.cursor });
+  }
+
   if (!env.GITHUB_TOKEN) return json({ error: "token" }, 503);
 
   // قائمة المقالات أو الصفحات
