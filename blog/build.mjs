@@ -127,7 +127,7 @@ const posts = existsSync(postsDir)
         const words = body.split(/\s+/).filter(Boolean).length;
         return {
           title: data.title || stem,
-          description: data.description || "",
+          description: data.description || "", excerpt: ((t) => (t.length > 170 ? t.slice(0, 170).replace(/\s\S*$/, "") + "…" : t))(body.replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/[#>*`\[\]]/g, "").replace(/\s+/g, " ").trim()),
           cover: data.cover || "",
           tags: data.tags ? String(data.tags).split(/[,،]/).map((t) => t.trim()).filter(Boolean) : [],
           draft: data.draft === true,
@@ -197,7 +197,7 @@ const postCard = (p) => `<article class="card">
   <a class="card-link" href="/posts/${esc(p.slug)}/">
     <div class="meta"><time datetime="${p.date}">${fmtDate(p.date)}</time><span>${p.minutes} د قراءة</span></div>
     <h2>${esc(p.title)}</h2>
-    ${p.description ? `<p>${esc(p.description)}</p>` : ""}
+    ${p.excerpt ? `<p>${esc(p.excerpt)}</p>` : ""}
   </a>
 </article>`;
 
