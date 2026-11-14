@@ -237,7 +237,6 @@ write(
   <h1>${esc(site.heading)}</h1>
   <p class="lead">${esc(site.description)}</p>
   <div class="actions">
-    <a class="btn" href="/admin/">+ إضافة</a>
     <button class="btn" id="notify-btn" type="button">تفعيل الإشعارات</button>
   </div>
   <p class="note" id="notify-msg" role="status" aria-live="polite"></p>
