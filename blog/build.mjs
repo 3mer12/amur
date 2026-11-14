@@ -142,7 +142,7 @@ const posts = existsSync(postsDir)
   : [];
 
 // ---------- القالب ----------
-const logo = `<a class="logo" href="/" aria-label="${esc(site.title)}"><span class="logo-word">عامر</span><span class="logo-cursor" aria-hidden="true"></span></a>`;
+const logo = `<a class="logo" href="/" aria-label="${esc(site.title)}"><img class="logo-img" src="/logo.jpg" alt="" width="44" height="44"><span class="logo-text"><span class="logo-word">عامر</span><span class="logo-cursor" aria-hidden="true"></span></span></a>`;
 
 function layout({ title, description, path, body, type = "website", cover = "" }) {
   const url = site.url.replace(/\/$/, "") + path;
@@ -161,9 +161,9 @@ function layout({ title, description, path, body, type = "website", cover = "" }
 <meta property="og:description" content="${esc(desc)}">
 <meta property="og:url" content="${esc(url)}">
 <meta property="og:locale" content="ar_AR">
-${cover ? `<meta property="og:image" content="${esc(site.url.replace(/\/$/, "") + cover)}">` : ""}
+<meta property="og:image" content="${esc(site.url.replace(/\/$/, "") + (cover || "/logo.jpg"))}">
 <link rel="alternate" type="application/rss+xml" title="${esc(site.title)}" href="/rss.xml">
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.png" type="image/png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Noto+Kufi+Arabic:wght@700;800&display=swap">
