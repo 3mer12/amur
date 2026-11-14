@@ -236,7 +236,13 @@ write(
   <p class="eyebrow">${esc(site.tagline)}</p>
   <h1>${esc(site.heading)}</h1>
   <p class="lead">${esc(site.description)}</p>
+  <div class="actions">
+    <a class="btn" href="/admin/">+ إضافة</a>
+    <button class="btn" id="notify-btn" type="button">تفعيل الإشعارات</button>
+  </div>
+  <p class="note" id="notify-msg" role="status" aria-live="polite"></p>
 </section>
+<script src="/notify.js" defer></script>
 <section class="list" aria-label="المقالات">
 ${posts.length ? posts.map(postCard).join("\n") : '<p class="empty">لا توجد مقالات بعد.</p>'}
 </section>`,
@@ -254,12 +260,12 @@ for (const p of posts) {
       type: "article",
       cover: p.cover,
       body: `<article class="post">
+  ${p.cover ? `<img class="cover" src="${esc(p.cover)}" alt="">` : ""}
   <header class="post-head">
     <div class="meta"><time datetime="${p.date}">${fmtDate(p.date)}</time><span>${p.minutes} د قراءة</span></div>
     <h1>${esc(p.title)}</h1>
     ${p.description ? `<p class="lead">${esc(p.description)}</p>` : ""}
   </header>
-  ${p.cover ? `<img class="cover" src="${esc(p.cover)}" alt="">` : ""}
   <div class="prose">
 ${p.html}
   </div>
