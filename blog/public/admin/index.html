@@ -87,6 +87,7 @@
     <div id="r-date"><label for="f-date">التاريخ</label><input id="f-date" class="ltr" type="date"></div>
     <div id="r-order"><label for="f-order">ترتيب الصفحة في القائمة (رقم)</label><input id="f-order" class="ltr" type="number" value="0"></div>
     <div id="r-desc"><label for="f-desc">وصف مختصر (اختياري)</label><input id="f-desc" type="text"></div>
+    <div id="r-cover"><label for="f-cover">صورة الغلاف (تظهر قبل العنوان)</label><input id="f-cover" class="ltr" type="text" placeholder="/images/..."><div class="row"><input type="file" id="f-cover-file" accept="image/*" hidden><button id="cover-btn" type="button">+ رفع صورة الغلاف</button><button id="cover-clear" type="button">إزالة الغلاف</button></div></div>
     <div id="r-tags"><label for="f-tags">الوسوم (افصل بينها بفاصلة)</label><input id="f-tags" type="text"></div>
     <label for="f-body">المحتوى (Markdown)</label>
     <textarea id="f-body"></textarea>
@@ -97,6 +98,7 @@
     <div class="row">
       <button id="save-btn" class="primary" type="button">حفظ</button>
       <button id="back-btn" type="button">رجوع</button>
+      <button id="notify-btn" type="button">إشعار المشتركين</button>
       <button id="del-btn" class="danger" type="button">حذف</button>
     </div>
     <p id="e-msg" class="msg" role="status"></p>
@@ -220,6 +222,8 @@
     $("r-slug").hidden = !c.isNew;
     $("r-date").hidden = about || !posts;
     $("r-tags").hidden = about || !posts;
+    $("r-cover").hidden = about || !posts;
+    $("notify-btn").hidden = about || !posts || c.isNew;
     $("r-order").hidden = about || posts;
     $("r-desc").hidden = about;
     $("r-draft").hidden = about;
@@ -234,6 +238,7 @@
     $("f-order").value = fm.order || "0";
     $("f-desc").value = fm.description || "";
     $("f-tags").value = fm.tags || "";
+    $("f-cover").value = fm.cover || "";
     $("f-draft").checked = fm.draft === "true";
     $("f-body").value = c.body || "";
     say("e-msg", "");
@@ -271,7 +276,7 @@
     if (!about) {
       fm.description = $("f-desc").value.trim();
       fm.draft = $("f-draft").checked ? "true" : "";
-      if (kind === "posts") { fm.date = $("f-date").value || today(); fm.tags = $("f-tags").value.trim(); }
+      if (kind === "posts") { fm.date = $("f-date").value || today(); fm.tags = $("f-tags").value.trim(); fm.cover = $("f-cover").value.trim(); }
       else fm.order = $("f-order").value;
     }
     var path = c.path;
@@ -344,6 +349,39 @@
       ta.value = ta.value.slice(0, pos) + md + ta.value.slice(pos);
       say("e-msg", "أُدرجت الصورة في النص. اضغط «حفظ» لنشرها.", "ok");
     }).catch(function () { say("e-msg", "تعذّر قراءة الصورة.", "err"); });
+  });
+
+  /* ---------- صورة الغلاف ---------- */
+  $("cover-btn").addEventListener("click", function () { $("f-cover-file").click(); });
+  $("cover-clear").addEventListener("click", function () { $("f-cover").value = ""; });
+  $("f-cover-file").addEventListener("change", function () {
+    var f = this.files[0];
+    this.value = "";
+    if (!f) return;
+    say("e-msg", "جارٍ رفع صورة الغلاف…");
+    encodeImage(f).then(function (p) { return api("upload", { method: "POST", body: p }); }).then(function (j) {
+      if (!j.ok) return say("e-msg", "تعذّر رفع الصورة.", "err");
+      $("f-cover").value = j.url;
+      say("e-msg", "رُفعت صورة الغلاف. اضغط «حفظ» لنشرها.", "ok");
+    }).catch(function () { say("e-msg", "تعذّر قراءة الصورة.", "err"); });
+  });
+
+  /* ---------- إشعار المشتركين ---------- */
+  $("notify-btn").addEventListener("click", function () {
+    if (!confirm("إرسال إشعار «مقال جديد» لكل المشتركين الآن؟ تأكد أن المقال ظهر في الموقع أولًا.")) return;
+    var btn = $("notify-btn"), sent = 0, removed = 0;
+    btn.disabled = true;
+    say("e-msg", "جارٍ إرسال الإشعارات…");
+    function step(cursor) {
+      return api("notify", { method: "POST", body: { cursor: cursor || undefined } }).then(function (j) {
+        if (j.error === "kv") { say("e-msg", "لم يُربط مخزن الإشعارات (KV) في Cloudflare بعد.", "err"); return; }
+        if (!j.ok) { say("e-msg", "تعذّر إرسال الإشعارات.", "err"); return; }
+        sent += j.sent; removed += j.removed;
+        if (!j.done && j.cursor) return step(j.cursor);
+        say("e-msg", "أُرسل الإشعار إلى " + sent + " مشترك.", "ok");
+      });
+    }
+    step(null).then(function () { btn.disabled = false; });
   });
 
   boot();
